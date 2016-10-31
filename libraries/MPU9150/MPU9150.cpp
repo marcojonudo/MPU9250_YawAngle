@@ -160,7 +160,7 @@ void MPU9150::initAK8963(float * destination)
 	// Configure the magnetometer for continuous read and highest resolution
 	// set Mscale bit 4 to 1 (0) to enable 16 (14) bit resolution in CNTL register,
 	// and enable continuous mode data acquisition Mmode (bits [3:0]), 0010 for 8 Hz and 0110 for 100 Hz sample rates
-	uint8_t Mmode = 0x02;
+	uint8_t Mmode = 0x06;
 	enum Mscale {
 		MFS_14BITS = 0, // 0.6 mG per LSB
 		MFS_16BITS      // 0.15 mG per LSB
@@ -1854,29 +1854,32 @@ void MPU9150::getMotion9(int16_t* ax, int16_t* ay, int16_t* az, int16_t* gx, int
     *mz = (((int16_t)buffer[4]) << 8) | buffer[5];
 }
 
-void MPU9150::magcalMPU9250(float * dest1, float * magCalibration) 
+void MPU9150::magcalMPU9250(float * dest1, float * dest2, float * magCalibration) 
 {
 	uint16_t ii = 0, sample_count = 0;
-	int32_t mag_bias[3] = {0, 0, 0};
-	int16_t mag_max[3] = {0, 0, 0}, mag_min[3] = {0, 0, 0}, mag_temp[3] = {0, 0, 0};
- 
+	int32_t mag_bias[3] = {0, 0, 0}, mag_scale[3] = {0, 0, 0};
+	int16_t mag_max[3] = {-32767, -32767, -32767}, mag_min[3] = {32767, 32767, 32767}, mag_temp[3] = {0, 0, 0};
+
 	Serial.println("Mag Calibration: Wave device in a figure eight until done!");
 	delay(4000);
-  
-	sample_count = 128;
+	
+	// shoot for ~fifteen seconds of mag data
+	// if Mmode == 0x06, sample_count = 1500 and delay(12);
+	sample_count = 1500;
 	for(ii = 0; ii < sample_count; ii++) {
 		readMagData(mag_temp);  // Read the mag data   
 		for (int jj = 0; jj < 3; jj++) {
 			if(mag_temp[jj] > mag_max[jj]) mag_max[jj] = mag_temp[jj];
 			if(mag_temp[jj] < mag_min[jj]) mag_min[jj] = mag_temp[jj];
 		}
-		delay(135);  // at 8 Hz ODR, new mag data is available every 125 ms
+		delay(12);  // at 8 Hz ODR, new mag data is available every 125 ms
 	}
 
 //	Serial.println("mag x min/max:"); Serial.println(mag_max[0]); Serial.println(mag_min[0]);
 //	Serial.println("mag y min/max:"); Serial.println(mag_max[1]); Serial.println(mag_min[1]);
 //	Serial.println("mag z min/max:"); Serial.println(mag_max[2]); Serial.println(mag_min[2]);
 
+	// Get hard iron correction
 	mag_bias[0]  = (mag_max[0] + mag_min[0])/2;  // get average x mag bias in counts
 	mag_bias[1]  = (mag_max[1] + mag_min[1])/2;  // get average y mag bias in counts
     mag_bias[2]  = (mag_max[2] + mag_min[2])/2;  // get average z mag bias in counts
@@ -1884,26 +1887,39 @@ void MPU9150::magcalMPU9250(float * dest1, float * magCalibration)
 	float mRes = 10.*4912./32760.0;
     dest1[0] = (float) mag_bias[0]*mRes*magCalibration[0];  // save mag biases in G for main program
     dest1[1] = (float) mag_bias[1]*mRes*magCalibration[1];   
-    dest1[2] = (float) mag_bias[2]*mRes*magCalibration[2];          
+    dest1[2] = (float) mag_bias[2]*mRes*magCalibration[2];   
+
+	// Get soft iron correction estimate
+    mag_scale[0]  = (mag_max[0] - mag_min[0])/2;  // get average x axis max chord length in counts
+    mag_scale[1]  = (mag_max[1] - mag_min[1])/2;  // get average y axis max chord length in counts
+    mag_scale[2]  = (mag_max[2] - mag_min[2])/2;  // get average z axis max chord length in counts
+
+    float avg_rad = mag_scale[0] + mag_scale[1] + mag_scale[2];
+    avg_rad /= 3.0;
+
+    dest2[0] = avg_rad/((float)mag_scale[0]);
+    dest2[1] = avg_rad/((float)mag_scale[1]);
+    dest2[2] = avg_rad/((float)mag_scale[2]);	
 
 	Serial.println("Mag Calibration done!");
 }
 
-void MPU9150::readMagData(int16_t * destination) {
+bool MPU9150::readMagData(int16_t * destination) {
 	uint8_t rawData[7];
 	//read mag
 	//MPU9150_RA_INT_PIN_CFG = 0x37, same as Kris
-    //if(readByte(MPU9150_RA_MAG_ADDRESS, 0x02) & 0x01) { // wait for magnetometer data ready bit to be set
+	bool newMagData = (readByte(MPU9150_RA_MAG_ADDRESS, 0x02) & 0x01);
+    if(newMagData == true) { // wait for magnetometer data ready bit to be set
 		readBytes(MPU9150_RA_MAG_ADDRESS, MPU9150_RA_MAG_XOUT_L, 7, &rawData[0]);  // Read the six raw data and ST2 registers sequentially into data array
 		uint8_t c = rawData[6]; // End data read by reading ST2 register
 		if(!(c & 0x08)) { // Check if magnetic sensor overflow set, if not then report data
-			I2Cdev::writeByte(MPU9150_RA_MAG_ADDRESS, 0x0A, 0x01); //enable the magnetometer
-			delay(10);
+			//I2Cdev::writeByte(MPU9150_RA_MAG_ADDRESS, 0x0A, 0x01); //enable the magnetometer
+			//delay(10);
 			destination[0] = ((int16_t)rawData[1] << 8) | rawData[0] ;  // Turn the MSB and LSB into a signed 16-bit value
 			destination[1] = ((int16_t)rawData[3] << 8) | rawData[2] ;  // Data stored as little Endian
 			destination[2] = ((int16_t)rawData[5] << 8) | rawData[4] ; 
 		}
-	//}
+	}
 }
 
 void MPU9150::readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest) {  

@@ -48,9 +48,11 @@ MPU9150 accelGyroMag;
 int16_t ax, ay, az;
 int16_t gx, gy, gz;
 int16_t mx, my, mz;
+int16_t magCount[3];
 
-#define LED_PIN 13
-bool blinkState = false;
+float magCalibration[3] = {0, 0, 0}, magBias[3] = {0, 0, 0}, magScale[3]  = {0, 0, 0};
+bool newMagData = false;
+float mRes = 10.*4912./32760.0;
 
 void setup() {
     // join I2C bus (I2Cdev library doesn't do this automatically)
@@ -59,27 +61,47 @@ void setup() {
     // initialize serial communication
     // (38400 chosen because it works as well at 8MHz as it does at 16MHz, but
     // it's really up to you depending on your project)
-    Serial.begin(115200);
+    Serial.begin(38400);
 
     // initialize device
     Serial.println("Initializing I2C devices...");
-    accelGyroMag.initialize();
+    //accelGyroMag.initialize();
+    //Initialize using KrisWinner method instead of this one
+    accelGyroMag.initMPU9250();
+    accelGyroMag.initAK8963(magCalibration);
+
+    //Calibrate magnetometer - get magBias values
+    accelGyroMag.magcalMPU9250(magBias, magScale, magCalibration);
+    Serial.println("AK8963 mag biases (mG)"); Serial.println(magBias[0]); Serial.println(magBias[1]); Serial.println(magBias[2]); 
+    Serial.println("AK8963 mag scale (mG)"); Serial.println(magScale[0]); Serial.println(magScale[1]); Serial.println(magScale[2]); 
+    delay(5000);// add delay to see results before serial spew of data
 
     // verify connection
+    /*
     Serial.println("Testing device connections...");
     Serial.println(accelGyroMag.testConnection() ? "MPU9150 connection successful" : "MPU9150 connection failed");
-
-    // configure Arduino LED for
-    pinMode(LED_PIN, OUTPUT);
+    */
 }
 
 void loop() {
     // read raw accel/gyro/mag measurements from device
-    accelGyroMag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
+//    accelGyroMag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
 
     // these methods (and a few others) are also available
     //accelGyroMag.getAcceleration(&ax, &ay, &az);
     //accelGyroMag.getRotation(&gx, &gy, &gz);
+
+    bool newMagData = accelGyroMag.readMagData(magCount);
+
+    if (newMagData == true) {
+        newMagData = false; // reset newMagData flag
+        mx = (float)magCount[0]*mRes*magCalibration[0] - magBias[0];  // get actual magnetometer value, this depends on scale being set
+        my = (float)magCount[1]*mRes*magCalibration[1] - magBias[1];  
+        mz = (float)magCount[2]*mRes*magCalibration[2] - magBias[2];  
+        mx *= magScale[0];
+        my *= magScale[1];
+        mz *= magScale[2];
+    }
 
     // display tab-separated accel/gyro/mag x/y/z values
 //  Serial.print("a/g/m:\t");
@@ -89,20 +111,10 @@ void loop() {
 //  Serial.print(gx); Serial.print("\t");
 //  Serial.print(gy); Serial.print("\t");
 //  Serial.print(gz); Serial.print("\t");
-    Serial.print(int(mx)*int(mx)); Serial.print("\t");
-    Serial.print(int(my)*int(my)); Serial.print("\t");
-    Serial.print(int(mz)*int(mz)); Serial.print("\t | ");
+    Serial.print("mx = "); Serial.print(mx); 
+    Serial.print(" my = "); Serial.print(my); 
+    Serial.print(" mz = "); Serial.print(mz); Serial.println(" mG");
 
-    const float N = 256;
-    float mag = mx*mx/N + my*my/N + mz*mz/N;
-
-    Serial.print(mag); Serial.print("\t");
-    for (int i=0; i<mag; i++)
-        Serial.print("*");
-    Serial.print("\n");
-
-    // blink LED to indicate activity
-    blinkState = !blinkState;
-    digitalWrite(LED_PIN, blinkState);
-    delay(50);
+    //Delay not necessary, as in readMagData it is checked if the data is available
+//    delay(50);
 }

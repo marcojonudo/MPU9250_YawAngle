@@ -459,7 +459,7 @@ class MPU9150 {
 		
 		void initMPU9250();
 		void initAK8963(float * destination);
-		void magcalMPU9250(float * dest1, float * magCalibration);
+		void magcalMPU9250(float * dest1, float * dest2, float * magCalibration);
 		void writeByte(uint8_t address, uint8_t subAddress, uint8_t data);
 		uint8_t readByte(uint8_t address, uint8_t subAddress);
 
@@ -635,7 +635,7 @@ class MPU9150 {
         // ACCEL_*OUT_* registers
         void getMotion9(int16_t* ax, int16_t* ay, int16_t* az, int16_t* gx, int16_t* gy, int16_t* gz, int16_t* mx, int16_t* my, int16_t* mz);
         
-		void readMagData(int16_t * destination);
+		bool readMagData(int16_t * destination);
 		void readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest);
 		
 		void getMotion6(int16_t* ax, int16_t* ay, int16_t* az, int16_t* gx, int16_t* gy, int16_t* gz);
