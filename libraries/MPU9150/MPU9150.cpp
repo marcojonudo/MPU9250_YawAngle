@@ -1862,6 +1862,7 @@ void MPU9150::magcalMPU9250(float * dest1, float * dest2, float * magCalibration
 
 	Serial.println("Mag Calibration: Wave device in a figure eight until done!");
 	delay(4000);
+	Serial.println("Starting!");
 	
 	// shoot for ~fifteen seconds of mag data
 	// if Mmode == 0x06, sample_count = 1500 and delay(12);
@@ -1873,6 +1874,7 @@ void MPU9150::magcalMPU9250(float * dest1, float * dest2, float * magCalibration
 			if(mag_temp[jj] > mag_max[jj]) mag_max[jj] = mag_temp[jj];
 			if(mag_temp[jj] < mag_min[jj]) mag_min[jj] = mag_temp[jj];
 		}
+		Serial.print(ii); Serial.print("/"); Serial.println(sample_count);
 		delay(135);  // at 8 Hz ODR, new mag data is available every 125 ms
 	}
 
