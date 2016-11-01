@@ -635,6 +635,7 @@ class MPU9150 {
         // ACCEL_*OUT_* registers
         void getMotion9(int16_t* ax, int16_t* ay, int16_t* az, int16_t* gx, int16_t* gy, int16_t* gz, int16_t* mx, int16_t* my, int16_t* mz);
         
+		void readAccelData(int16_t * destination);
 		void readMagData(int16_t * destination);
 		void readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest);
 		

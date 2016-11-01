@@ -1907,6 +1907,14 @@ void MPU9150::magcalMPU9250(float * dest1, float * dest2, float * magCalibration
 	Serial.println("Mag Calibration done!");
 }
 
+void MPU9150::readAccelData(int16_t * destination) {
+	uint8_t rawData[6];  // x/y/z accel register data stored here
+	readBytes(MPU9150_RA_MAG_ADDRESS, MPU9150_RA_ACCEL_XOUT_H, 6, &rawData[0]);  // Read the six raw data registers into data array
+	destination[0] = ((int16_t)rawData[0] << 8) | rawData[1] ;  // Turn the MSB and LSB into a signed 16-bit value
+	destination[1] = ((int16_t)rawData[2] << 8) | rawData[3] ;  
+	destination[2] = ((int16_t)rawData[4] << 8) | rawData[5] ; 
+}
+
 void MPU9150::readMagData(int16_t * destination) {
 	uint8_t rawData[7];
 	//read mag
