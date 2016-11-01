@@ -48,11 +48,13 @@ MPU9150 accelGyroMag;
 int16_t ax, ay, az;
 int16_t gx, gy, gz;
 int16_t mx, my, mz;
-int16_t magCount[3];
+int16_t magCount[3], accelCount[3];
 
 float magCalibration[3] = {0, 0, 0}, magBias[3] = {0, 0, 0}, magScale[3]  = {0, 0, 0};
 bool newMagData = false;
 float mRes = 10.*4912./32760.0;
+float aRes = 2.0/32768.0;
+float heading = 0.0;
 
 void setup() {
     // join I2C bus (I2Cdev library doesn't do this automatically)
@@ -109,38 +111,44 @@ void loop() {
     //accelGyroMag.getAcceleration(&ax, &ay, &az);
     //accelGyroMag.getRotation(&gx, &gy, &gz);
     uint8_t b = (accelGyroMag.readByte(0x68, 0x3A) & 0x01);
-    Serial.println(b);
     if (b) {
-        Serial.println("Entramos");
-        
+        accelGyroMag.getAcceleration(&ax, &ay, &az);
         accelGyroMag.readMagData(magCount);
+
+        ax = (float)ax;
+        ay = (float)ay;
+        az = (float)az;
         
-        mx = (float)magCount[0];//*mRes*magCalibration[0] - magBias[0];  // get actual magnetometer value, this depends on scale being set
-        my = (float)magCount[1];//*mRes*magCalibration[1] - magBias[1];  
-        mz = (float)magCount[2];//*mRes*magCalibration[2] - magBias[2];  
-//        mx *= magScale[0];
-//        my *= magScale[1];
-//        mz *= magScale[2];
+        mx = (float)magCount[0]*mRes*magCalibration[0] - magBias[0];  // get actual magnetometer value, this depends on scale being set
+        my = (float)magCount[1]*mRes*magCalibration[1] - magBias[1];  
+        mz = (float)magCount[2]*mRes*magCalibration[2] - magBias[2];  
+        mx *= magScale[0];
+        my *= magScale[1];
+        mz *= magScale[2];
     }
     else {
-        Serial.println("Nooooo");
-        mx = (float)magCount[0];//*mRes*magCalibration[0] - magBias[0];  // get actual magnetometer value, this depends on scale being set
-        my = (float)magCount[1];//*mRes*magCalibration[1] - magBias[1];  
-        mz = (float)magCount[2];//*mRes*magCalibration[2] - magBias[2]; 
+        mx = (float)magCount[0]*mRes*magCalibration[0] - magBias[0];  // get actual magnetometer value, this depends on scale being set
+        my = (float)magCount[1]*mRes*magCalibration[1] - magBias[1];  
+        mz = (float)magCount[2]*mRes*magCalibration[2] - magBias[2]; 
     }
-    
+
+    /*Serial.print("ax = "); Serial.print(ax); 
+    Serial.print(" ay = "); Serial.print(ay); 
+    Serial.print(" az = "); Serial.print(az); Serial.println(" raw");
     Serial.print("mx = "); Serial.print(mx); 
     Serial.print(" my = "); Serial.print(my); 
-    Serial.print(" mz = "); Serial.print(mz); Serial.println(" mG");
+    Serial.print(" mz = "); Serial.print(mz); Serial.println(" mG");*/
 
-    // display tab-separated accel/gyro/mag x/y/z values
-//  Serial.print("a/g/m:\t");
-//  Serial.print(ax); Serial.print("\t");
-//  Serial.print(ay); Serial.print("\t");
-//  Serial.print(az); Serial.print("\t");
-//  Serial.print(gx); Serial.print("\t");
-//  Serial.print(gy); Serial.print("\t");
-//  Serial.print(gz); Serial.print("\t");
+    heading = atan2(my, mx);
+
+    if (heading < 0.0) {
+        heading += (2.0 * PI);
+    }
+    if (heading > (2.0 * PI)) {
+        heading -= (2.0 * PI);
+    }
+    heading *= (180.0 / PI);
+    Serial.print("Heading: "); Serial.println(heading);
     
 
     //Delay not necessary, as in readMagData it is checked if the data is available
