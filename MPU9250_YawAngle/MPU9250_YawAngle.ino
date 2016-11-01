@@ -70,13 +70,30 @@ void setup() {
     accelGyroMag.initMPU9250();
     accelGyroMag.initAK8963(magCalibration);
 
-    //Calibrate magnetometer - get magBias values
-    accelGyroMag.magcalMPU9250(magBias, magScale, magCalibration);
+    //Calibrate magnetometer
+//    accelGyroMag.magcalMPU9250(magBias, magScale, magCalibration);
+//    delay(5000);// add delay to see results before serial spew of data
+    
+    //mag biases: 21.71, 33.16, -21.51
+    //mag scale: 1.11, 0.97, 0.93 
+    
+    //mag biases: 27.63, 39.01, -28.68
+    //mag scale: 1.01, 0.99, 0.99
+
+    //mag biases: 21.71, 29.26, -26.88
+    //mag scale: 1.08, 0.99, 0.94
+
+    magBias[0] = 23.68;
+    magBias[1] = 33.81;
+    magBias[2] = -25.69;
+    magScale[0] = 1.06;
+    magScale[1] = 0.98;
+    magScale[2] = 0.95;
+
     Serial.println("AK8963 mag biases (mG)"); Serial.println(magBias[0]); Serial.println(magBias[1]); Serial.println(magBias[2]); 
     Serial.println("AK8963 mag scale (mG)"); Serial.println(magScale[0]); Serial.println(magScale[1]); Serial.println(magScale[2]); 
-    delay(5000);// add delay to see results before serial spew of data
-    //mag biases: 21.71, 39.01, 7.17
-    //mag scale: 1.32, 1.05, 0.77
+    
+    
     // verify connection
     /*
     Serial.println("Testing device connections...");
