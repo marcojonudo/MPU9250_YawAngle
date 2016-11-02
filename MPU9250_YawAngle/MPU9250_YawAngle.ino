@@ -61,6 +61,8 @@ float heading = 0.0;
 
 float q[4] = {1.0f, 0.0f, 0.0f, 0.0f};
 float eInt[3] = {0.0f, 0.0f, 0.0f};
+float a12, a22, a31, a32, a33;
+float pitch, yaw, roll;
 
 float GyroMeasError = PI * (4.0f / 180.0f);   // gyroscope measurement error in rads/s (start at 40 deg/s)
 float GyroMeasDrift = PI * (0.0f  / 180.0f);   // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
@@ -196,6 +198,7 @@ void loop() {
 
     MadgwickQuaternionUpdate(-ax2, ay2, az2, gx2*PI/180.0f, -gy2*PI/180.0f, -gz2*PI/180.0f,  my,  -mx, mz);
 
+    /*
     Serial.print("ax2 = "); Serial.print(ax2); 
     Serial.print(" ay2 = "); Serial.print(ay2); 
     Serial.print(" az2 = "); Serial.print(az2); Serial.println(" g");
@@ -210,6 +213,28 @@ void loop() {
     Serial.print(" qx = "); Serial.print(q[1]); 
     Serial.print(" qy = "); Serial.print(q[2]); 
     Serial.print(" qz = "); Serial.println(q[3]); 
+    */
+
+    a12 =   2.0f * (q[1] * q[2] + q[0] * q[3]);
+    a22 =   q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3];
+    a31 =   2.0f * (q[0] * q[1] + q[2] * q[3]);
+    a32 =   2.0f * (q[1] * q[3] - q[0] * q[2]);
+    a33 =   q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3];
+    pitch = -asinf(a32);
+    roll  = atan2f(a31, a33);
+    yaw   = atan2f(a12, a22);
+    pitch *= 180.0f / PI;
+    yaw   *= 180.0f / PI; 
+    yaw   += 13.8f; // Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
+    if(yaw < 0) yaw   += 360.0f; // Ensure yaw stays between 0 and 360
+    roll  *= 180.0f / PI;
+
+    Serial.print("Yaw, Pitch, Roll: ");
+    Serial.print(yaw, 2);
+    Serial.print(", ");
+    Serial.print(pitch, 2);
+    Serial.print(", ");
+    Serial.println(roll, 2);
 
     //Delay not necessary, as in readMagData it is checked if the data is available
 //    delay(50);
