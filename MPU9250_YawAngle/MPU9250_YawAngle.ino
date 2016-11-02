@@ -50,11 +50,28 @@ int16_t gx, gy, gz;
 int16_t mx, my, mz;
 int16_t magCount[3], accelCount[3];
 
+float ax_base, ay_base, az_base;
+float gx_base, gy_base, gz_base;
+
 float magCalibration[3] = {0, 0, 0}, magBias[3] = {0, 0, 0}, magScale[3]  = {0, 0, 0};
 bool newMagData = false;
 float mRes = 10.*4912./32760.0;
 float aRes = 2.0/32768.0;
 float heading = 0.0;
+
+float q[4] = {1.0f, 0.0f, 0.0f, 0.0f};
+float eInt[3] = {0.0f, 0.0f, 0.0f};
+
+float GyroMeasError = PI * (4.0f / 180.0f);   // gyroscope measurement error in rads/s (start at 40 deg/s)
+float GyroMeasDrift = PI * (0.0f  / 180.0f);   // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
+
+float beta = sqrt(3.0f / 4.0f) * GyroMeasError;   // compute beta
+float zeta = sqrt(3.0f / 4.0f) * GyroMeasDrift;   // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
+
+float deltat = 0.0f;
+
+#define Kp 2.0f * 5.0f // these are the free parameters in the Mahony filter and fusion scheme, Kp for proportional feedback, Ki for integral
+#define Ki 0.0f
 
 void setup() {
     // join I2C bus (I2Cdev library doesn't do this automatically)
@@ -72,9 +89,16 @@ void setup() {
     accelGyroMag.initMPU9250();
     accelGyroMag.initAK8963(magCalibration);
 
+    //Calibrate accelerometer and gyroscope
+    /*
+    accelGyroCalMPU9250();
+    */
+    
     //Calibrate magnetometer
-//    accelGyroMag.magcalMPU9250(magBias, magScale, magCalibration);
-//    delay(5000);// add delay to see results before serial spew of data
+    /*
+    accelGyroMag.magcalMPU9250(magBias, magScale, magCalibration);
+    delay(5000);// add delay to see results before serial spew of data
+    */
     
     //mag biases: 21.71, 33.16, -21.51
     //mag scale: 1.11, 0.97, 0.93 
@@ -92,9 +116,12 @@ void setup() {
     magScale[1] = 0.98;
     magScale[2] = 0.95;
 
-    Serial.println("AK8963 mag biases (mG)"); Serial.println(magBias[0]); Serial.println(magBias[1]); Serial.println(magBias[2]); 
-    Serial.println("AK8963 mag scale (mG)"); Serial.println(magScale[0]); Serial.println(magScale[1]); Serial.println(magScale[2]); 
-    
+    ax_base = -184.55;
+    ay_base = 207.77;
+    //az_base = 15749.66; //az must not be 0, so offset value is not applied
+    gx_base = -279.67;
+    gy_base = 139.34;
+    gz_base = -65.23;
     
     // verify connection
     /*
@@ -111,13 +138,18 @@ void loop() {
     //accelGyroMag.getAcceleration(&ax, &ay, &az);
     //accelGyroMag.getRotation(&gx, &gy, &gz);
     uint8_t b = (accelGyroMag.readByte(0x68, 0x3A) & 0x01);
+    float ax2, ay2, az2, gx2, gy2, gz2;
     if (b) {
-        accelGyroMag.getAcceleration(&ax, &ay, &az);
+        accelGyroMag.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
         accelGyroMag.readMagData(magCount);
 
-        ax = (float)ax;
-        ay = (float)ay;
-        az = (float)az;
+        ax2 = (float)ax/16384;
+        ay2 = (float)ay/16384;
+        az2 = (float)az/16384;
+
+        gx2 = (float)(gx-gx_base)/131;
+        gy2 = (float)(gy-gy_base)/131;
+        gz2 = (float)(gz-gz_base)/131; 
         
         mx = (float)magCount[0]*mRes*magCalibration[0] - magBias[0];  // get actual magnetometer value, this depends on scale being set
         my = (float)magCount[1]*mRes*magCalibration[1] - magBias[1];  
@@ -132,15 +164,27 @@ void loop() {
         mz = (float)magCount[2]*mRes*magCalibration[2] - magBias[2]; 
     }
 
-    /*Serial.print("ax = "); Serial.print(ax); 
+    /*
+    Serial.print("ax = "); Serial.print(ax); 
     Serial.print(" ay = "); Serial.print(ay); 
     Serial.print(" az = "); Serial.print(az); Serial.println(" raw");
+    Serial.print("ax2 = "); Serial.print(ax2); 
+    Serial.print(" ay2 = "); Serial.print(ay2); 
+    Serial.print(" az2 = "); Serial.print(az2); Serial.println(" g");
+    Serial.print("gx = "); Serial.print(gx); 
+    Serial.print(" gy = "); Serial.print(gy); 
+    Serial.print(" gz = "); Serial.print(gz); Serial.println(" raw");
+    Serial.print("gx2 = "); Serial.print(gx2); 
+    Serial.print(" gy2 = "); Serial.print(gy2); 
+    Serial.print(" gz2 = "); Serial.print(gz2); Serial.println(" grad/s");
     Serial.print("mx = "); Serial.print(mx); 
     Serial.print(" my = "); Serial.print(my); 
-    Serial.print(" mz = "); Serial.print(mz); Serial.println(" mG");*/
+    Serial.print(" mz = "); Serial.print(mz); Serial.println(" mG");
+    */
 
-    heading = atan2(my, mx);
 
+    //Heading calculation, works but very imprecise.
+    /*heading = atan2(my, mx);
     if (heading < 0.0) {
         heading += (2.0 * PI);
     }
@@ -148,9 +192,85 @@ void loop() {
         heading -= (2.0 * PI);
     }
     heading *= (180.0 / PI);
-    Serial.print("Heading: "); Serial.println(heading);
-    
+    Serial.print("Heading: "); Serial.println(heading);*/
+
+    MadgwickQuaternionUpdate(-ax2, ay2, az2, gx2*PI/180.0f, -gy2*PI/180.0f, -gz2*PI/180.0f,  my,  -mx, mz);
+
+    Serial.print("ax2 = "); Serial.print(ax2); 
+    Serial.print(" ay2 = "); Serial.print(ay2); 
+    Serial.print(" az2 = "); Serial.print(az2); Serial.println(" g");
+    Serial.print("gx2 = "); Serial.print(gx2); 
+    Serial.print(" gy2 = "); Serial.print(gy2); 
+    Serial.print(" gz2 = "); Serial.print(gz2); Serial.println(" deg/s");
+    Serial.print("mx = "); Serial.print(mx); 
+    Serial.print(" my = "); Serial.print(my); 
+    Serial.print(" mz = "); Serial.print(mz); Serial.println(" mG");
+
+    Serial.print("q0 = "); Serial.print(q[0]);
+    Serial.print(" qx = "); Serial.print(q[1]); 
+    Serial.print(" qy = "); Serial.print(q[2]); 
+    Serial.print(" qz = "); Serial.println(q[3]); 
 
     //Delay not necessary, as in readMagData it is checked if the data is available
 //    delay(50);
+}
+
+void accelGyroCalMPU9250() {
+    int                   num_readings = 100;
+    float                 x_accel = 0;
+    float                 y_accel = 0;
+    float                 z_accel = 0;
+    float                 x_gyro = 0;
+    float                 y_gyro = 0;
+    float                 z_gyro = 0;
+    //uint16_t ax, ay, az, gx, gy, gz;
+    float accelGyroBase[6];
+  
+    //Serial.println("Starting Calibration");
+  
+    // Discard the first set of values read from the IMU
+    //read_gyro_accel_vals((uint8_t *) &accel_t_gyro);
+    accelGyroMag.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+    
+    // Read and average the raw values from the IMU
+    for (int i = 0; i < num_readings; i++) {
+      accelGyroMag.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+      Serial.print(ax); Serial.print("\t");
+      Serial.print(ay); Serial.print("\t");
+      Serial.print(az); Serial.println("\t");
+      Serial.print(gx); Serial.print("\t");
+      Serial.print(gy); Serial.print("\t");
+      Serial.print(gz); Serial.print("\t");
+      x_accel += (float)ax;
+      y_accel += (float)ay;
+      z_accel += (float)az;
+      x_gyro += (float)gx;
+      y_gyro += (float)gy;
+      z_gyro += (float)gz;
+      delay(100);
+    }
+    x_accel /= num_readings;
+    y_accel /= num_readings;
+    z_accel /= num_readings;
+    x_gyro /= num_readings;
+    y_gyro /= num_readings;
+    z_gyro /= num_readings;
+  
+    // Store the raw calibration values globally
+    ax_base = x_accel;
+    ay_base = y_accel;
+    az_base = z_accel;
+    gx_base = x_gyro;
+    gy_base = y_gyro;
+    gz_base = z_gyro;
+    
+    Serial.println("Base values");
+    Serial.print(ax_base); Serial.print("\t");
+    Serial.print(ay_base); Serial.print("\t");
+    Serial.print(az_base); Serial.println("\t");
+    Serial.print(gx_base); Serial.print("\t");
+    Serial.print(gy_base); Serial.print("\t");
+    Serial.print(gz_base); Serial.print("\t");
+  
+    //Serial.println("Finishing Calibration");
 }
