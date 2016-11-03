@@ -52,6 +52,7 @@ int16_t magCount[3], accelCount[3];
 
 float ax_base, ay_base, az_base;
 float gx_base, gy_base, gz_base;
+float gx_angle, gy_angle, gz_angle;
 
 float magCalibration[3] = {0, 0, 0}, magBias[3] = {0, 0, 0}, magScale[3]  = {0, 0, 0};
 bool newMagData = false;
@@ -63,6 +64,12 @@ float q[4] = {1.0f, 0.0f, 0.0f, 0.0f};
 float eInt[3] = {0.0f, 0.0f, 0.0f};
 float a12, a22, a31, a32, a33;
 float pitch, yaw, roll;
+float aRoll, aPitch;
+float RADIANS_TO_DEGREES = 180/3.14159;
+float dt, last_time;
+float alpha = 0.96;
+float last_x_angle, last_y_angle, last_z_angle;
+float magx, magy;
 
 float GyroMeasError = PI * (4.0f / 180.0f);   // gyroscope measurement error in rads/s (start at 40 deg/s)
 float GyroMeasDrift = PI * (0.0f  / 180.0f);   // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
@@ -130,6 +137,11 @@ void setup() {
     Serial.println("Testing device connections...");
     Serial.println(accelGyroMag.testConnection() ? "MPU9150 connection successful" : "MPU9150 connection failed");
     */
+
+    last_time = millis();
+    last_x_angle = 0;
+    last_y_angle = 0;
+    last_z_angle = 0;
 }
 
 void loop() {
@@ -159,11 +171,30 @@ void loop() {
         mx *= magScale[0];
         my *= magScale[1];
         mz *= magScale[2];
-    }
-    else {
-        mx = (float)magCount[0]*mRes*magCalibration[0] - magBias[0];  // get actual magnetometer value, this depends on scale being set
-        my = (float)magCount[1]*mRes*magCalibration[1] - magBias[1];  
-        mz = (float)magCount[2]*mRes*magCalibration[2] - magBias[2]; 
+
+        aRoll = atan(ay2/sqrt(pow(ax2,2) + pow(az2,2)))*RADIANS_TO_DEGREES;
+        aPitch = atan(-1*ax2/sqrt(pow(ay2,2) + pow(az2,2)))*RADIANS_TO_DEGREES;
+
+        dt = (millis() - last_time)/1000.0;
+        gx_angle = gx2*dt + last_x_angle;
+        gy_angle = gy2*dt + last_y_angle;
+        gz_angle = gz2*dt + last_z_angle;
+
+        roll = alpha*gx_angle + (1.0 - alpha)*aRoll;
+        pitch = alpha*gy_angle + (1.0 - alpha)*aPitch;
+
+        //Serial.print(roll); Serial.print("  "); Serial.println(pitch);
+
+        magx = mz*sin(roll) - my*cos(roll);
+        magy = mx*cos(pitch) + my*sin(pitch)*sin(roll) + mz*sin(pitch)*cos(roll);
+
+        yaw = atan(magx/magy)*RADIANS_TO_DEGREES;
+        Serial.println(yaw);
+        
+        last_time = millis();
+        last_x_angle = roll;
+        last_y_angle = pitch;
+        last_z_angle = gz_angle;
     }
 
     /*
@@ -195,46 +226,6 @@ void loop() {
     }
     heading *= (180.0 / PI);
     Serial.print("Heading: "); Serial.println(heading);*/
-
-    MadgwickQuaternionUpdate(-ax2, ay2, az2, gx2*PI/180.0f, -gy2*PI/180.0f, -gz2*PI/180.0f,  my,  -mx, mz);
-
-    /*
-    Serial.print("ax2 = "); Serial.print(ax2); 
-    Serial.print(" ay2 = "); Serial.print(ay2); 
-    Serial.print(" az2 = "); Serial.print(az2); Serial.println(" g");
-    Serial.print("gx2 = "); Serial.print(gx2); 
-    Serial.print(" gy2 = "); Serial.print(gy2); 
-    Serial.print(" gz2 = "); Serial.print(gz2); Serial.println(" deg/s");
-    Serial.print("mx = "); Serial.print(mx); 
-    Serial.print(" my = "); Serial.print(my); 
-    Serial.print(" mz = "); Serial.print(mz); Serial.println(" mG");
-
-    Serial.print("q0 = "); Serial.print(q[0]);
-    Serial.print(" qx = "); Serial.print(q[1]); 
-    Serial.print(" qy = "); Serial.print(q[2]); 
-    Serial.print(" qz = "); Serial.println(q[3]); 
-    */
-
-    a12 =   2.0f * (q[1] * q[2] + q[0] * q[3]);
-    a22 =   q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3];
-    a31 =   2.0f * (q[0] * q[1] + q[2] * q[3]);
-    a32 =   2.0f * (q[1] * q[3] - q[0] * q[2]);
-    a33 =   q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3];
-    pitch = -asinf(a32);
-    roll  = atan2f(a31, a33);
-    yaw   = atan2f(a12, a22);
-    pitch *= 180.0f / PI;
-    yaw   *= 180.0f / PI; 
-    yaw   += 13.8f; // Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
-    if(yaw < 0) yaw   += 360.0f; // Ensure yaw stays between 0 and 360
-    roll  *= 180.0f / PI;
-
-    Serial.print("Yaw, Pitch, Roll: ");
-    Serial.print(yaw, 2);
-    Serial.print(", ");
-    Serial.print(pitch, 2);
-    Serial.print(", ");
-    Serial.println(roll, 2);
 
     //Delay not necessary, as in readMagData it is checked if the data is available
 //    delay(50);
