@@ -74,7 +74,7 @@ float magx, magy;
 float GyroMeasError = PI * (4.0f / 180.0f);   // gyroscope measurement error in rads/s (start at 40 deg/s)
 float GyroMeasDrift = PI * (0.0f  / 180.0f);   // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
 
-float beta = sqrt(3.0f / 4.0f) * GyroMeasError;   // compute beta
+//float beta = sqrt(3.0f / 4.0f) * GyroMeasError;   // compute beta
 float zeta = sqrt(3.0f / 4.0f) * GyroMeasDrift;   // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
 
 float deltat = 0.0f;
@@ -163,7 +163,11 @@ void loop() {
 
         gx2 = (float)(gx-gx_base)/131;
         gy2 = (float)(gy-gy_base)/131;
-        gz2 = (float)(gz-gz_base)/131; 
+        gz2 = (float)(gz-gz_base)/131;
+
+        Serial.print("mx = "); Serial.print(magCount[0]); 
+        Serial.print(" my = "); Serial.print(magCount[1]); 
+        Serial.print(" mz = "); Serial.print(magCount[2]); Serial.println(" raw");
         
         mx = (float)magCount[0]*mRes*magCalibration[0] - magBias[0];  // get actual magnetometer value, this depends on scale being set
         my = (float)magCount[1]*mRes*magCalibration[1] - magBias[1];  
@@ -171,6 +175,8 @@ void loop() {
         mx *= magScale[0];
         my *= magScale[1];
         mz *= magScale[2];
+
+        MadgwickQuaternionUpdate(gx2, gy2, gz2, ax2, ay2, az2, mx, my, mz);
 
         aRoll = atan(ay2/sqrt(pow(ax2,2) + pow(az2,2)))*RADIANS_TO_DEGREES;
         aPitch = atan(-1*ax2/sqrt(pow(ay2,2) + pow(az2,2)))*RADIANS_TO_DEGREES;
@@ -189,7 +195,7 @@ void loop() {
         magy = mx*cos(pitch) + my*sin(pitch)*sin(roll) + mz*sin(pitch)*cos(roll);
 
         yaw = atan(magx/magy)*RADIANS_TO_DEGREES;
-        Serial.println(yaw);
+        //Serial.println(yaw);
         
         last_time = millis();
         last_x_angle = roll;
