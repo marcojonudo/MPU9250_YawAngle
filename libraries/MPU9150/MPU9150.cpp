@@ -1849,9 +1849,9 @@ void MPU9150::getMotion9(int16_t* ax, int16_t* ay, int16_t* az, int16_t* gx, int
     I2Cdev::writeByte(MPU9150_RA_MAG_ADDRESS, 0x0A, 0x01); //enable the magnetometer
     delay(10);
     I2Cdev::readBytes(MPU9150_RA_MAG_ADDRESS, MPU9150_RA_MAG_XOUT_L, 6, buffer);
-    *mx = (((int16_t)buffer[0]) << 8) | buffer[1];
-    *my = (((int16_t)buffer[2]) << 8) | buffer[3];
-    *mz = (((int16_t)buffer[4]) << 8) | buffer[5];
+    *mx = (((int16_t)buffer[1]) << 8) | buffer[0];
+    *my = (((int16_t)buffer[3]) << 8) | buffer[2];
+    *mz = (((int16_t)buffer[5]) << 8) | buffer[4];
 }
 
 void MPU9150::magcalMPU9250(float * dest1, float * dest2, float * magCalibration) 
@@ -2921,7 +2921,7 @@ void MPU9150::setFIFOByte(uint8_t data) {
  */
 uint8_t MPU9150::getDeviceID() {
     I2Cdev::readBits(devAddr, MPU9150_RA_WHO_AM_I, MPU9150_WHO_AM_I_BIT, MPU9150_WHO_AM_I_LENGTH, buffer);
-    return buffer[0];
+	return buffer[0];
 }
 /** Set Device ID.
  * Write a new ID into the WHO_AM_I register (no idea why this should ever be
