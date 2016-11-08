@@ -77,6 +77,7 @@ float GyroMeasDrift = PI * (0.0f  / 180.0f);   // gyroscope measurement drift in
 //float beta = sqrt(3.0f / 4.0f) * GyroMeasError;   // compute beta
 float zeta = sqrt(3.0f / 4.0f) * GyroMeasDrift;   // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
 
+uint32_t Now = 0, lastUpdate = 0;
 float deltat = 0.0f;
 
 #define Kp 2.0f * 5.0f // these are the free parameters in the Mahony filter and fusion scheme, Kp for proportional feedback, Ki for integral
@@ -165,9 +166,9 @@ void loop() {
         gy2 = (float)(gy-gy_base)/131;
         gz2 = (float)(gz-gz_base)/131;
 
-        Serial.print("mx = "); Serial.print(magCount[0]); 
+        /*Serial.print("mx = "); Serial.print(magCount[0]); 
         Serial.print(" my = "); Serial.print(magCount[1]); 
-        Serial.print(" mz = "); Serial.print(magCount[2]); Serial.println(" raw");
+        Serial.print(" mz = "); Serial.print(magCount[2]); Serial.println(" raw");*/
         
         mx = (float)magCount[0]*mRes*magCalibration[0] - magBias[0];  // get actual magnetometer value, this depends on scale being set
         my = (float)magCount[1]*mRes*magCalibration[1] - magBias[1];  
@@ -176,31 +177,31 @@ void loop() {
         my *= magScale[1];
         mz *= magScale[2];
 
-        MadgwickQuaternionUpdate(gx2, gy2, gz2, ax2, ay2, az2, mx, my, mz);
+        Now = micros();
+        deltat = ((Now - lastUpdate)/1000000.0f); // set integration time by time elapsed since last filter update
+        lastUpdate = Now;
 
-        aRoll = atan(ay2/sqrt(pow(ax2,2) + pow(az2,2)))*RADIANS_TO_DEGREES;
-        aPitch = atan(-1*ax2/sqrt(pow(ay2,2) + pow(az2,2)))*RADIANS_TO_DEGREES;
-
-        dt = (millis() - last_time)/1000.0;
-        gx_angle = gx2*dt + last_x_angle;
-        gy_angle = gy2*dt + last_y_angle;
-        gz_angle = gz2*dt + last_z_angle;
-
-        roll = alpha*gx_angle + (1.0 - alpha)*aRoll;
-        pitch = alpha*gy_angle + (1.0 - alpha)*aPitch;
-
-        //Serial.print(roll); Serial.print("  "); Serial.println(pitch);
-
-        magx = mz*sin(roll) - my*cos(roll);
-        magy = mx*cos(pitch) + my*sin(pitch)*sin(roll) + mz*sin(pitch)*cos(roll);
-
-        yaw = atan(magx/magy)*RADIANS_TO_DEGREES;
-        //Serial.println(yaw);
+        //MadgwickAHRSupdate(gx2, gy2, gz2, ax2, ay2, az2, mx, my, mz);
+        MadgwickQuaternionUpdate(-ax, ay, az, gx*PI/180.0f, -gy*PI/180.0f, -gz*PI/180.0f,  my,  -mx, mz);
         
-        last_time = millis();
-        last_x_angle = roll;
-        last_y_angle = pitch;
-        last_z_angle = gz_angle;
+        /*
+        complementaryFilter(ax2, ay2, az2, gx2, gy2, gz2, mx, my, mz);
+        */
+    
+        a12 =   2.0f * (q[1] * q[2] + q[0] * q[3]);
+        a22 =   q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3];
+        a31 =   2.0f * (q[0] * q[1] + q[2] * q[3]);
+        a32 =   2.0f * (q[1] * q[3] - q[0] * q[2]);
+        a33 =   q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3];
+        pitch = -asinf(a32);
+        roll  = atan2f(a31, a33);
+        yaw   = atan2f(a12, a22);
+        pitch *= 180.0f / PI;
+        yaw   *= 180.0f / PI; 
+        if(yaw < 0) yaw   += 360.0f; // Ensure yaw stays between 0 and 360
+        roll  *= 180.0f / PI;
+
+        Serial.println(yaw);
     }
 
     /*
@@ -223,7 +224,16 @@ void loop() {
 
 
     //Heading calculation, works but very imprecise.
-    /*heading = atan2(my, mx);
+    /*
+    heading = simpleHeading();
+    */
+
+    //Delay not necessary, as in readMagData it is checked if the data is available
+//    delay(50);
+}
+
+float simpleHeading() {
+    heading = atan2(my, mx);
     if (heading < 0.0) {
         heading += (2.0 * PI);
     }
@@ -231,10 +241,33 @@ void loop() {
         heading -= (2.0 * PI);
     }
     heading *= (180.0 / PI);
-    Serial.print("Heading: "); Serial.println(heading);*/
+    return heading;
+}
 
-    //Delay not necessary, as in readMagData it is checked if the data is available
-//    delay(50);
+void complementaryFilter(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz) {
+    aRoll = atan(ay/sqrt(pow(ax,2) + pow(az,2)))*RADIANS_TO_DEGREES;
+    aPitch = atan(-1*ax/sqrt(pow(ay,2) + pow(az,2)))*RADIANS_TO_DEGREES;
+
+    dt = (millis() - last_time)/1000.0;
+    gx_angle = gx*dt + last_x_angle;
+    gy_angle = gy*dt + last_y_angle;
+    gz_angle = gz*dt + last_z_angle;
+
+    roll = alpha*gx_angle + (1.0 - alpha)*aRoll;
+    pitch = alpha*gy_angle + (1.0 - alpha)*aPitch;
+
+    //Serial.print(roll); Serial.print("  "); Serial.println(pitch);
+
+    magx = mz*sin(roll) - my*cos(roll);
+    magy = mx*cos(pitch) + my*sin(pitch)*sin(roll) + mz*sin(pitch)*cos(roll);
+
+    yaw = atan(magx/magy)*RADIANS_TO_DEGREES;
+    //Serial.println(yaw);
+    
+    last_time = millis();
+    last_x_angle = roll;
+    last_y_angle = pitch;
+    last_z_angle = gz_angle;
 }
 
 void accelGyroCalMPU9250() {
