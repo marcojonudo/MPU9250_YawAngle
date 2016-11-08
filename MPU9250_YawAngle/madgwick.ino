@@ -38,7 +38,6 @@ volatile float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f;	// quaternion of sens
 // AHRS algorithm update
 
 void MadgwickAHRSupdate(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz) {
-	Serial.println("Test MadgwickAHRSupdate");
 	float recipNorm;
 	float s0, s1, s2, s3;
 	float qDot1, qDot2, qDot3, qDot4;
@@ -52,10 +51,10 @@ void MadgwickAHRSupdate(float gx, float gy, float gz, float ax, float ay, float 
 	}
 
 	// Rate of change of quaternion from gyroscope
-	qDot1 = 0.5f * (-q1 * gx - q2 * gy - q3 * gz);
-	qDot2 = 0.5f * (q0 * gx + q2 * gz - q3 * gy);
-	qDot3 = 0.5f * (q0 * gy - q1 * gz + q3 * gx);
-	qDot4 = 0.5f * (q0 * gz + q1 * gy - q2 * gx);
+	qDot1 = 0.5f * (-q1 * gx - q2 * gy - q3 * gz);// - beta * s1; (hecho mas abajo)
+	qDot2 = 0.5f * (q0 * gx + q2 * gz - q3 * gy);// - beta * s2;
+	qDot3 = 0.5f * (q0 * gy - q1 * gz + q3 * gx);// - beta * s3;
+	qDot4 = 0.5f * (q0 * gz + q1 * gy - q2 * gx);// - beta * s4;
 
 	// Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
 	if(!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
@@ -132,6 +131,8 @@ void MadgwickAHRSupdate(float gx, float gy, float gz, float ax, float ay, float 
 	q1 *= recipNorm;
 	q2 *= recipNorm;
 	q3 *= recipNorm;
+  //Serial.println("q0\tq1\tq2\tq3");
+  //Serial.print(q0); Serial.print("\t");Serial.print(q1); Serial.print("\t");Serial.print(q2); Serial.print("\t");Serial.println(q3);
 }
 
 //---------------------------------------------------------------------------------------------------
