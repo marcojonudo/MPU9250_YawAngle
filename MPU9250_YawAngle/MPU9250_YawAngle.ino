@@ -74,7 +74,7 @@ float magx, magy;
 float GyroMeasError = PI * (4.0f / 180.0f);   // gyroscope measurement error in rads/s (start at 40 deg/s)
 float GyroMeasDrift = PI * (0.0f  / 180.0f);   // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
 
-//float beta = sqrt(3.0f / 4.0f) * GyroMeasError;   // compute beta
+float beta = sqrt(3.0f / 4.0f) * GyroMeasError;   // compute beta
 float zeta = sqrt(3.0f / 4.0f) * GyroMeasDrift;   // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
 
 uint32_t Now = 0, lastUpdate = 0;
@@ -166,9 +166,21 @@ void loop() {
         gy2 = (float)(gy-gy_base)/131;
         gz2 = (float)(gz-gz_base)/131;
 
+        float res = 4800.0/32767.0;
+        float res2 = 10.*4800/32767.0;
+
         /*Serial.print("mx = "); Serial.print(magCount[0]); 
         Serial.print(" my = "); Serial.print(magCount[1]); 
-        Serial.print(" mz = "); Serial.print(magCount[2]); Serial.println(" raw");*/
+        Serial.print(" mz = "); Serial.print(magCount[2]); Serial.println(" raw");
+        Serial.print("mx = "); Serial.print(magCount[0]*res); 
+        Serial.print(" my = "); Serial.print(magCount[1]*res); 
+        Serial.print(" mz = "); Serial.print(magCount[2]*res); Serial.println(" uT");
+        Serial.print("mx = "); Serial.print(magCount[0]*res2); 
+        Serial.print(" my = "); Serial.print(magCount[1]*res2); 
+        Serial.print(" mz = "); Serial.print(magCount[2]*res2); Serial.println(" mG");*/
+        Serial.print(magCount[0]*res2); Serial.print(",");
+        Serial.print(magCount[1]*res2); Serial.print(",");
+        Serial.println(magCount[2]*res2);
         
         mx = (float)magCount[0]*mRes*magCalibration[0] - magBias[0];  // get actual magnetometer value, this depends on scale being set
         my = (float)magCount[1]*mRes*magCalibration[1] - magBias[1];  
@@ -201,7 +213,11 @@ void loop() {
         if(yaw < 0) yaw   += 360.0f; // Ensure yaw stays between 0 and 360
         roll  *= 180.0f / PI;
 
-        Serial.println(yaw);
+        //Serial.println("q[0]\tq[1]\tq[2]\tq[3]");
+        //Serial.print(q[0]); Serial.print("\t"); Serial.print(q[1]);
+        //Serial.print("\t"); Serial.print(q[2]); Serial.print("\t"); Serial.println(q[3]);
+        //Serial.println("Simple\tMadgwick");
+        //Serial.print(simpleHeading()); Serial.print("\t"); Serial.println(yaw);
     }
 
     /*
@@ -229,7 +245,7 @@ void loop() {
     */
 
     //Delay not necessary, as in readMagData it is checked if the data is available
-//    delay(50);
+    //delay(50);
 }
 
 float simpleHeading() {
