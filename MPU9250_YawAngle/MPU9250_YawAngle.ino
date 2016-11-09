@@ -245,7 +245,7 @@ void loop() {
     */
 
     //Delay not necessary, as in readMagData it is checked if the data is available
-    //delay(50);
+    delay(50);
 }
 
 float simpleHeading() {
