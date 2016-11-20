@@ -174,10 +174,12 @@ void loop() {
         Serial.print(" mz = "); Serial.print(magCount[2]); Serial.println(" raw");
         Serial.print("mx = "); Serial.print(magCount[0]*res); 
         Serial.print(" my = "); Serial.print(magCount[1]*res); 
-        Serial.print(" mz = "); Serial.print(magCount[2]*res); Serial.println(" uT");
-        Serial.print("mx = "); Serial.print(magCount[0]*res2); 
+        Serial.print(" mz = "); Serial.print(magCount[2]*res); Serial.println(" uT");*/
+        /*Serial.print("mx = "); Serial.print(magCount[0]*res2); 
         Serial.print(" my = "); Serial.print(magCount[1]*res2); 
-        Serial.print(" mz = "); Serial.print(magCount[2]*res2); Serial.println(" mG");*/
+        Serial.print(" mz = "); Serial.print(magCount[2]*res2); Serial.print(" mG");
+        Serial.print("\t"); Serial.println(sqrt(pow(magCount[0]*res2,2)+pow(magCount[1]*res2,2)+pow(magCount[2]*res2,2)));
+        */
         Serial.print(magCount[0]*res2); Serial.print(",");
         Serial.print(magCount[1]*res2); Serial.print(",");
         Serial.println(magCount[2]*res2);
