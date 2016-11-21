@@ -8,17 +8,35 @@
 
 #define MPU9250_ADDRESS 0x68
 #define WHO_AM_I_MPU9250 0x75 // Should return 0x71
+#define XG_OFFSET_H      0x13  // User-defined trim values for gyroscope
+#define XG_OFFSET_L      0x14
+#define YG_OFFSET_H      0x15
+#define YG_OFFSET_L      0x16
+#define ZG_OFFSET_H      0x17
+#define ZG_OFFSET_L      0x18
 #define SMPLRT_DIV       0x19
 #define CONFIG           0x1A
 #define GYRO_CONFIG      0x1B
 #define ACCEL_CONFIG     0x1C
 #define ACCEL_CONFIG2    0x1D
+#define FIFO_EN          0x23
+#define I2C_MST_CTRL     0x24   
 #define INT_PIN_CFG      0x37
 #define INT_ENABLE       0x38
 #define INT_STATUS       0x3A
 #define ACCEL_XOUT_H     0x3B
 #define GYRO_XOUT_H      0x43
+#define USER_CTRL        0x6A  // Bit 7 enable DMP, bit 3 reset DMP
 #define PWR_MGMT_1       0x6B // Device defaults to the SLEEP mode
+#define PWR_MGMT_2       0x6C
+#define FIFO_COUNTH      0x72
+#define FIFO_R_W         0x74
+#define XA_OFFSET_H      0x77
+#define XA_OFFSET_L      0x78
+#define YA_OFFSET_H      0x7A
+#define YA_OFFSET_L      0x7B
+#define ZA_OFFSET_H      0x7D
+#define ZA_OFFSET_L      0x7E
 
 #define AK8963_ADDRESS   0x0C
 #define AK8963_WHO_AM_I  0x00 // should return 0x48
@@ -33,14 +51,36 @@ uint8_t Ascale = 0;
 uint8_t Mscale = 1; // 16-bit magnetometer resolution
 uint8_t Mmode = 0x06;
 
+int buffersize=1000;     //Amount of readings used to average, make it higher to get more precision but sketch will be slower  (default:1000)
+int acel_deadzone=8;     //Acelerometer error allowed, make it lower to get more precision, but sketch may not converge  (default:8)
+int giro_deadzone=1;     //Giro error allowed, make it lower to get more precision, but sketch may not converge  (default:1)
+
 int16_t accelCount[3], gyroCount[3], magCount[3];
 
 float magCalibration[3] = {0, 0, 0}, magBias[3] = {0, 0, 0}, magScale[3]  = {0, 0, 0};
+float gyroBias[3] = {0, 0, 0}, accelBias[3] = {0, 0, 0};
 float mRes = 10.*4800.0/32767.0; // Proper scale to return milliGauss
 float aRes = 2.0/32767.0;
 float gRes = 250.0/32767.0;
 
+int mean_ax,mean_ay,mean_az,mean_gx,mean_gy,mean_gz,state=0;
+int ax_offset,ay_offset,az_offset,gx_offset,gy_offset,gz_offset;
 float ax, ay, az, gx, gy, gz, mx, my, mz;
+
+uint32_t count = 0, sumCount = 0; // used to control display output rate
+float pitch, yaw, roll;
+float deltat = 0.0f, sum = 0.0f;        // integration interval for both filter schemes
+uint32_t lastUpdate = 0; // used to calculate integration interval
+uint32_t Now = 0;        // used to calculate integration interval
+
+float GyroMeasError = PI * (40.0f / 180.0f);   // gyroscope measurement error in rads/s (start at 40 deg/s)
+#define Kp 2.0f * 5.0f // these are the free parameters in the Mahony filter and fusion scheme, Kp for proportional feedback, Ki for integral
+#define Ki 0.0f
+
+float a12, a22, a31, a32, a33;
+float q[4] = {1.0f, 0.0f, 0.0f, 0.0f};    // vector to hold quaternion
+float eInt[3] = {0.0f, 0.0f, 0.0f};       // vector to hold integral error for Mahony method
+float beta = sqrt(3.0f / 4.0f) * GyroMeasError;   // compute beta
 
 void setup() {
     // join I2C bus (I2Cdev library doesn't do this automatically)
@@ -55,7 +95,18 @@ void setup() {
 
     if (c == 0x71) {
         Serial.println("MPU9250 is online...");
-
+        
+        //calibrateAccelGyro(accelBias, gyroBias); // Calibrate gyro and accelerometers, load biases in bias registers
+        accelBias[0] = 0.01;
+        accelBias[1] = 0.03;
+        accelBias[2] = -0.06;
+        gyroBias[0] = 2.04;
+        gyroBias[1] = 0.59;
+        gyroBias[2] = 0.36;
+        Serial.println("MPU9250 accel biases (g)"); Serial.println(accelBias[0]); Serial.println(accelBias[1]); Serial.println(accelBias[2]); 
+        Serial.println("MPU9250 gyro biases (deg/s)"); Serial.println(gyroBias[0]); Serial.println(gyroBias[1]); Serial.println(gyroBias[2]); 
+        delay(2000);
+        
         initMPU9250();
         Serial.println("MPU9250 initialized for active data mode...."); // Initialize device for active mode read of acclerometer, gyroscope, and temperature
 
@@ -67,35 +118,43 @@ void setup() {
         Serial.println("AK8963 initialized for active data mode...."); // Initialize device for active mode read of magnetometer
 
         //magcalMPU9250(magBias, magScale);
+        magBias[0] = -363.018;
+        magBias[1] = 651.042;
+        magBias[2] = -516.544;
+        magScale[0] = 1.0625;
+        magScale[1] = 0.945;
+        magScale[2] = 0.9825;
         Serial.println("AK8963 mag biases (mG)"); Serial.println(magBias[0]); Serial.println(magBias[1]); Serial.println(magBias[2]); 
         Serial.println("AK8963 mag scale (mG)"); Serial.println(magScale[0]); Serial.println(magScale[1]); Serial.println(magScale[2]); 
         delay(2000); // add delay to see results before serial spew of data
+        
+    
     }
 }
 
 void loop() {
     // If intPin goes high, all data registers have new data
     if (readByte(MPU9250_ADDRESS, INT_STATUS) & 0x01) {  // On interrupt, check if data ready interrupt
-        /*readAccelData(accelCount);  // Read the x/y/z adc values
+        readAccelData(accelCount);  // Read the x/y/z adc values
         
         // Now we'll calculate the accleration value into actual g's
-        ax = (float)accelCount[0]*aRes; // - accelBias[0];  // get actual g value, this depends on scale being set
-        ay = (float)accelCount[1]*aRes; // - accelBias[1];   
-        az = (float)accelCount[2]*aRes; // - accelBias[2];
-        Serial.print("ax = "); Serial.print(ax); 
-        Serial.print(" ay = "); Serial.print(ay); 
-        Serial.print(" az = "); Serial.print(az); Serial.println(" g");
+        ax = (float)accelCount[0]*aRes - accelBias[0];  // get actual g value, this depends on scale being set
+        ay = (float)accelCount[1]*aRes - accelBias[1];   
+        az = (float)accelCount[2]*aRes - accelBias[2];
+//        Serial.print("ax = "); Serial.print(ax); 
+//        Serial.print(" ay = "); Serial.print(ay); 
+//        Serial.print(" az = "); Serial.print(az); Serial.println(" g");
        
         readGyroData(gyroCount);  // Read the x/y/z adc values
      
         // Calculate the gyro value into actual degrees per second
-        gx = (float)gyroCount[0]*gRes;  // get actual gyro value, this depends on scale being set
-        gy = (float)gyroCount[1]*gRes;  
-        gz = (float)gyroCount[2]*gRes;
-        Serial.print("gx = "); Serial.print(gx); 
-        Serial.print(" gy = "); Serial.print(gy); 
-        Serial.print(" gz = "); Serial.print(gz); Serial.println(" deg/s");
-        */
+        gx = (float)gyroCount[0]*gRes - gyroBias[0];  // get actual gyro value, this depends on scale being set
+        gy = (float)gyroCount[1]*gRes - gyroBias[1];  
+        gz = (float)gyroCount[2]*gRes - gyroBias[2];
+//        Serial.print("gx = "); Serial.print(gx); 
+//        Serial.print(" gy = "); Serial.print(gy); 
+//        Serial.print(" gz = "); Serial.print(gz); Serial.println(" deg/s");
+        
         readMagData(magCount);  // Read the x/y/z adc values
         
 //        magBias[0] = -335.09;
@@ -127,13 +186,6 @@ void loop() {
 //        magScale[1] = 0.93;
 //        magScale[2] = 0.96;
 
-        magBias[0] = -363.018;  // User environmental x-axis correction in milliGauss, should be automatically calculated
-        magBias[1] = 651.042;  // User environmental x-axis correction in milliGauss
-        magBias[2] = -516.544;  // User environmental x-axis correction in milliGauss
-        magScale[0] = 1.0625;
-        magScale[1] = 0.945;
-        magScale[2] = 0.9825;
-
         // Calculate the magnetometer values in milliGauss
         // Include factory calibration per data sheet and user environmental corrections
         mx = (float)magCount[0]*mRes*magCalibration[0] - magBias[0];  // get actual magnetometer value, this depends on scale being set
@@ -141,15 +193,71 @@ void loop() {
         mz = (float)magCount[2]*mRes*magCalibration[2] - magBias[2];
         mx *= magScale[0];
         my *= magScale[1];
-        mz *= magScale[2]; 
-
-        Serial.print(mx); Serial.print(","); 
-        Serial.print(my); Serial.print(","); 
-        Serial.println(mz);
-        
+        mz *= magScale[2];         
     }
+
+//    Now = micros();
+//    deltat = ((Now - lastUpdate)/1000000.0f); // set integration time by time elapsed since last filter update
+//    lastUpdate = Now;
+//
+//    MadgwickQuaternionUpdate(-ax, ay, az, gx*PI/180.0f, -gy*PI/180.0f, -gz*PI/180.0f,  my,  -mx, mz);
+//    
+//    a12 =   2.0f * (q[1] * q[2] + q[0] * q[3]);
+//    a22 =   q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3];
+//    a31 =   2.0f * (q[0] * q[1] + q[2] * q[3]);
+//    a32 =   2.0f * (q[1] * q[3] - q[0] * q[2]);
+//    a33 =   q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3];
+//    pitch = -asinf(a32);
+//    roll  = atan2f(a31, a33);
+//    yaw   = atan2f(a12, a22);
+//    pitch *= 180.0f / PI;
+//    yaw   *= 180.0f / PI; 
+//    if(yaw < 0) yaw   += 360.0f; // Ensure yaw stays between 0 and 360
+//    roll  *= 180.0f / PI;
+//
+//    Serial.println(yaw);
 }
 
+
+void calibrateAccelGyro(float * dest1, float * dest2) {  
+    int                   num_readings = 50;
+    float                 x_accel = 0;
+    float                 y_accel = 0;
+    float                 z_accel = 0;
+    float                 x_gyro = 0;
+    float                 y_gyro = 0;
+    float                 z_gyro = 0;
+    
+    Serial.println("Starting Calibration");
+    readAccelData(accelCount);
+    readGyroData(gyroCount);
+    
+    // Read and average the raw values from the IMU
+    for (int i = 0; i < num_readings; i++) {
+        readAccelData(accelCount);
+        readGyroData(gyroCount);
+        x_accel += accelCount[0];
+        y_accel += accelCount[1];
+        z_accel += accelCount[2];
+        x_gyro += gyroCount[0];
+        y_gyro += gyroCount[1];
+        z_gyro += gyroCount[2];
+        delay(100);
+    }
+    x_accel /= num_readings;
+    y_accel /= num_readings;
+    z_accel /= num_readings;
+    x_gyro /= num_readings;
+    y_gyro /= num_readings;
+    z_gyro /= num_readings;
+
+    dest1[0] = x_accel*aRes; 
+    dest1[1] = y_accel*aRes; 
+    dest1[2] = (z_accel-16384.0)*aRes;
+    dest2[0] = x_gyro*gRes; 
+    dest2[1] = y_gyro*gRes; 
+    dest2[2] = z_gyro*gRes; 
+}
 
 void initMPU9250() {
     writeByte(MPU9250_ADDRESS, PWR_MGMT_1, 0x00); // Clear sleep mode bit (6), enable all sensors 
