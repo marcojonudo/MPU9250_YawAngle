@@ -97,15 +97,24 @@ void setup() {
         Serial.println("MPU9250 is online...");
         
         //calibrateAccelGyro(accelBias, gyroBias); // Calibrate gyro and accelerometers, load biases in bias registers
-        accelBias[0] = 0.01;
-        accelBias[1] = 0.03;
-        accelBias[2] = -0.06;
-        gyroBias[0] = 2.04;
-        gyroBias[1] = 0.59;
-        gyroBias[2] = 0.36;
+        //Medidas para el MPU2
+//        accelBias[0] = 342.49;
+//        accelBias[1] = 584.08;
+//        accelBias[2] = -991.31;
+//        gyroBias[0] = 270.76;
+//        gyroBias[1] = 77.34;
+//        gyroBias[2] = 37.61;
+        //Medidas para el MPU1
+        accelBias[0] = 91.56;
+        accelBias[1] = 284.14;
+        accelBias[2] = -247.44;
+        gyroBias[0] = -245.24;
+        gyroBias[1] = 123.38;
+        gyroBias[2] = -74.00;
+
         Serial.println("MPU9250 accel biases (g)"); Serial.println(accelBias[0]); Serial.println(accelBias[1]); Serial.println(accelBias[2]); 
         Serial.println("MPU9250 gyro biases (deg/s)"); Serial.println(gyroBias[0]); Serial.println(gyroBias[1]); Serial.println(gyroBias[2]); 
-        delay(2000);
+        delay(1000);
         
         initMPU9250();
         Serial.println("MPU9250 initialized for active data mode...."); // Initialize device for active mode read of acclerometer, gyroscope, and temperature
@@ -118,17 +127,32 @@ void setup() {
         Serial.println("AK8963 initialized for active data mode...."); // Initialize device for active mode read of magnetometer
 
         //magcalMPU9250(magBias, magScale);
-        magBias[0] = -363.018;
-        magBias[1] = 651.042;
-        magBias[2] = -516.544;
-        magScale[0] = 1.0625;
-        magScale[1] = 0.945;
-        magScale[2] = 0.9825;
+        //Valores obtenidos sin recorrer bien el espacio con la calibración (figuras 8)
+//        magBias[0] = -363.018;
+//        magBias[1] = 651.042;
+//        magBias[2] = -516.544;
+//        magScale[0] = 1.0625;
+//        magScale[1] = 0.945;
+//        magScale[2] = 0.9825;
+        //Nuevos valores, viendo las gráficas de Matlab deberían ser más precisos
+//        magBias[0] = -533.80;
+//        magBias[1] = 578.96;
+//        magBias[2] = -413.09;
+//        magScale[0] = 1.08;
+//        magScale[1] = 1.054;
+//        magScale[2] = 0.898;
+        //Valores con el MPU1, correspondientes al archivo 'MPU_YawAngle_Uncalibrated_Calibracion'
+        //Los 3 planos salen casi perfectos en esa figura
+        magBias[0] = -57.78;
+        magBias[1] = 228.83;
+        magBias[2] = -105.37;
+        magScale[0] = 0.97;
+        magScale[1] = 1.07;
+        magScale[2] = 0.97;
+
         Serial.println("AK8963 mag biases (mG)"); Serial.println(magBias[0]); Serial.println(magBias[1]); Serial.println(magBias[2]); 
         Serial.println("AK8963 mag scale (mG)"); Serial.println(magScale[0]); Serial.println(magScale[1]); Serial.println(magScale[2]); 
-        delay(2000); // add delay to see results before serial spew of data
-        
-    
+        delay(1000); // add delay to see results before serial spew of data
     }
 }
 
@@ -138,9 +162,9 @@ void loop() {
         readAccelData(accelCount);  // Read the x/y/z adc values
         
         // Now we'll calculate the accleration value into actual g's
-        ax = (float)accelCount[0]*aRes - accelBias[0];  // get actual g value, this depends on scale being set
-        ay = (float)accelCount[1]*aRes - accelBias[1];   
-        az = (float)accelCount[2]*aRes - accelBias[2];
+        ax = ((float)accelCount[0] - accelBias[0])*aRes;  // get actual g value, this depends on scale being set
+        ay = ((float)accelCount[1] - accelBias[1])*aRes;   
+        az = ((float)accelCount[2] - accelBias[2])*aRes;
 //        Serial.print("ax = "); Serial.print(ax); 
 //        Serial.print(" ay = "); Serial.print(ay); 
 //        Serial.print(" az = "); Serial.print(az); Serial.println(" g");
@@ -148,44 +172,15 @@ void loop() {
         readGyroData(gyroCount);  // Read the x/y/z adc values
      
         // Calculate the gyro value into actual degrees per second
-        gx = (float)gyroCount[0]*gRes - gyroBias[0];  // get actual gyro value, this depends on scale being set
-        gy = (float)gyroCount[1]*gRes - gyroBias[1];  
-        gz = (float)gyroCount[2]*gRes - gyroBias[2];
+        gx = ((float)gyroCount[0] - gyroBias[0])*gRes;  // get actual gyro value, this depends on scale being set
+        gy = ((float)gyroCount[1] - gyroBias[1])*gRes;  
+        gz = ((float)gyroCount[2] - gyroBias[2])*gRes;
 //        Serial.print("gx = "); Serial.print(gx); 
 //        Serial.print(" gy = "); Serial.print(gy); 
 //        Serial.print(" gz = "); Serial.print(gz); Serial.println(" deg/s");
         
         readMagData(magCount);  // Read the x/y/z adc values
         
-//        magBias[0] = -335.09;
-//        magBias[1] = 681.61;
-//        magBias[2] = -513.17;
-        
-//        magBias[0] = -340.33;
-//        magBias[1] = 655.26;
-//        magBias[2] = -509.79;
-
-//        magBias[0] = -376.98;
-//        magBias[1] = 648.23;
-//        magBias[2] = -524.99;
-//        magScale[0] = 1.10;
-//        magScale[1] = 0.93;
-//        magScale[2] = 0.99;
-
-//        magBias[0] = -366.51;
-//        magBias[1] = 628.91;
-//        magBias[2] = -535.11;
-//        magScale[0] = 1.01;
-//        magScale[1] = 0.96;
-//        magScale[2] = 1.04;
-
-//        magBias[0] = -396.18;
-//        magBias[1] = 641.20;
-//        magBias[2] = -499.66;
-//        magScale[0] = 1.14;
-//        magScale[1] = 0.93;
-//        magScale[2] = 0.96;
-
         // Calculate the magnetometer values in milliGauss
         // Include factory calibration per data sheet and user environmental corrections
         mx = (float)magCount[0]*mRes*magCalibration[0] - magBias[0];  // get actual magnetometer value, this depends on scale being set
@@ -193,34 +188,38 @@ void loop() {
         mz = (float)magCount[2]*mRes*magCalibration[2] - magBias[2];
         mx *= magScale[0];
         my *= magScale[1];
-        mz *= magScale[2];         
+        mz *= magScale[2];
+//        Serial.print(mx); Serial.print(",");         
+//        Serial.print(my); Serial.print(",");
+//        Serial.println(mz); //Serial.print("\t");
+        //Serial.println(sqrt(pow(mx,2)+pow(my,2)+pow(mz,2)));
     }
 
-//    Now = micros();
-//    deltat = ((Now - lastUpdate)/1000000.0f); // set integration time by time elapsed since last filter update
-//    lastUpdate = Now;
-//
-//    MadgwickQuaternionUpdate(-ax, ay, az, gx*PI/180.0f, -gy*PI/180.0f, -gz*PI/180.0f,  my,  -mx, mz);
-//    
-//    a12 =   2.0f * (q[1] * q[2] + q[0] * q[3]);
-//    a22 =   q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3];
-//    a31 =   2.0f * (q[0] * q[1] + q[2] * q[3]);
-//    a32 =   2.0f * (q[1] * q[3] - q[0] * q[2]);
-//    a33 =   q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3];
-//    pitch = -asinf(a32);
-//    roll  = atan2f(a31, a33);
-//    yaw   = atan2f(a12, a22);
-//    pitch *= 180.0f / PI;
-//    yaw   *= 180.0f / PI; 
-//    if(yaw < 0) yaw   += 360.0f; // Ensure yaw stays between 0 and 360
-//    roll  *= 180.0f / PI;
-//
-//    Serial.println(yaw);
+    Now = micros();
+    deltat = ((Now - lastUpdate)/1000000.0f); // set integration time by time elapsed since last filter update
+    lastUpdate = Now;
+
+    MadgwickQuaternionUpdate(-ax, ay, az, gx*PI/180.0f, -gy*PI/180.0f, -gz*PI/180.0f,  my,  -mx, mz);
+    
+    a12 =   2.0f * (q[1] * q[2] + q[0] * q[3]);
+    a22 =   q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3];
+    a31 =   2.0f * (q[0] * q[1] + q[2] * q[3]);
+    a32 =   2.0f * (q[1] * q[3] - q[0] * q[2]);
+    a33 =   q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3];
+    pitch = -asinf(a32);
+    roll  = atan2f(a31, a33);
+    yaw   = atan2f(a12, a22);
+    pitch *= 180.0f / PI;
+    yaw   *= 180.0f / PI; 
+    if(yaw < 0) yaw   += 360.0f; // Ensure yaw stays between 0 and 360
+    roll  *= 180.0f / PI;
+
+    Serial.println(yaw);
 }
 
 
 void calibrateAccelGyro(float * dest1, float * dest2) {  
-    int                   num_readings = 50;
+    int                   num_readings = 200;
     float                 x_accel = 0;
     float                 y_accel = 0;
     float                 z_accel = 0;
@@ -251,12 +250,12 @@ void calibrateAccelGyro(float * dest1, float * dest2) {
     y_gyro /= num_readings;
     z_gyro /= num_readings;
 
-    dest1[0] = x_accel*aRes; 
-    dest1[1] = y_accel*aRes; 
-    dest1[2] = (z_accel-16384.0)*aRes;
-    dest2[0] = x_gyro*gRes; 
-    dest2[1] = y_gyro*gRes; 
-    dest2[2] = z_gyro*gRes; 
+    dest1[0] = x_accel; 
+    dest1[1] = y_accel; 
+    dest1[2] = (z_accel-16384.0);
+    dest2[0] = x_gyro; 
+    dest2[1] = y_gyro; 
+    dest2[2] = z_gyro; 
 }
 
 void initMPU9250() {
@@ -347,14 +346,17 @@ void magcalMPU9250(float * dest1, float * dest2)
     delay(4000);
   
     // shoot for ~fifteen seconds of mag data
-    if(Mmode == 0x02) sample_count = 128;  // at 8 Hz ODR, new mag data is available every 125 ms
-    if(Mmode == 0x06) sample_count = 1500;  // at 100 Hz ODR, new mag data is available every 10 ms
+    if(Mmode == 0x02) sample_count = 200;  // at 8 Hz ODR, new mag data is available every 125 ms
+    if(Mmode == 0x06) sample_count = 2000;  // at 100 Hz ODR, new mag data is available every 10 ms
     for(ii = 0; ii < sample_count; ii++) {
         readMagData(mag_temp);  // Read the mag data   
         for (int jj = 0; jj < 3; jj++) {
           if(mag_temp[jj] > mag_max[jj]) mag_max[jj] = mag_temp[jj];
           if(mag_temp[jj] < mag_min[jj]) mag_min[jj] = mag_temp[jj];
         }
+        Serial.print(mag_temp[0]*mRes); Serial.print(",");         
+        Serial.print(mag_temp[1]*mRes); Serial.print(",");
+        Serial.println(mag_temp[2]*mRes);
         if(Mmode == 0x02) delay(135);  // at 8 Hz ODR, new mag data is available every 125 ms
         if(Mmode == 0x06) delay(12);  // at 100 Hz ODR, new mag data is available every 10 ms
     }
@@ -405,9 +407,9 @@ void readMagData(int16_t * destination) {
         readBytes(AK8963_ADDRESS, AK8963_XOUT_L, 7, &rawData[0]);  // Read the six raw data and ST2 registers sequentially into data array
         uint8_t c = rawData[6]; // End data read by reading ST2 register
         if(!(c & 0x08)) { // Check if magnetic sensor overflow set, if not then report data
-          destination[0] = ((int16_t)rawData[1] << 8) | rawData[0] ;  // Turn the MSB and LSB into a signed 16-bit value
-          destination[1] = ((int16_t)rawData[3] << 8) | rawData[2] ;  // Data stored as little Endian
-          destination[2] = ((int16_t)rawData[5] << 8) | rawData[4] ; 
+            destination[0] = ((int16_t)rawData[1] << 8) | rawData[0] ;  // Turn the MSB and LSB into a signed 16-bit value
+            destination[1] = ((int16_t)rawData[3] << 8) | rawData[2] ;  // Data stored as little Endian
+            destination[2] = ((int16_t)rawData[5] << 8) | rawData[4] ; 
         }
     }
 }
