@@ -63,8 +63,6 @@ float mRes = 10.*4800.0/32767.0; // Proper scale to return milliGauss
 float aRes = 2.0/32767.0;
 float gRes = 250.0/32767.0;
 
-int mean_ax,mean_ay,mean_az,mean_gx,mean_gy,mean_gz,state=0;
-int ax_offset,ay_offset,az_offset,gx_offset,gy_offset,gz_offset;
 float ax, ay, az, gx, gy, gz, mx, my, mz;
 
 uint32_t count = 0, sumCount = 0; // used to control display output rate
@@ -96,21 +94,13 @@ void setup() {
     if (c == 0x71) {
         Serial.println("MPU9250 is online...");
         
-        //calibrateAccelGyro(accelBias, gyroBias); // Calibrate gyro and accelerometers, load biases in bias registers
-        //Medidas para el MPU2
-//        accelBias[0] = 342.49;
-//        accelBias[1] = 584.08;
-//        accelBias[2] = -991.31;
-//        gyroBias[0] = 270.76;
-//        gyroBias[1] = 77.34;
-//        gyroBias[2] = 37.61;
-        //Medidas para el MPU1
-        accelBias[0] = 91.56;
-        accelBias[1] = 284.14;
-        accelBias[2] = -247.44;
-        gyroBias[0] = -245.24;
-        gyroBias[1] = 123.38;
-        gyroBias[2] = -74.00;
+//        calibrateAccelGyro(accelBias, gyroBias); // Calibrate gyro and accelerometers, load biases in bias registers
+        accelBias[0] = 66.00;
+        accelBias[1] = 264.08;
+        accelBias[2] = -1295.76;
+        gyroBias[0] = -280.54;
+        gyroBias[1] = 131.13;
+        gyroBias[2] = 8.31;
 
         Serial.println("MPU9250 accel biases (g)"); Serial.println(accelBias[0]); Serial.println(accelBias[1]); Serial.println(accelBias[2]); 
         Serial.println("MPU9250 gyro biases (deg/s)"); Serial.println(gyroBias[0]); Serial.println(gyroBias[1]); Serial.println(gyroBias[2]); 
@@ -126,29 +116,15 @@ void setup() {
         initAK8963(magCalibration);
         Serial.println("AK8963 initialized for active data mode...."); // Initialize device for active mode read of magnetometer
 
-        //magcalMPU9250(magBias, magScale);
-        //Valores obtenidos sin recorrer bien el espacio con la calibración (figuras 8)
-//        magBias[0] = -363.018;
-//        magBias[1] = 651.042;
-//        magBias[2] = -516.544;
-//        magScale[0] = 1.0625;
-//        magScale[1] = 0.945;
-//        magScale[2] = 0.9825;
-        //Nuevos valores, viendo las gráficas de Matlab deberían ser más precisos
-//        magBias[0] = -533.80;
-//        magBias[1] = 578.96;
-//        magBias[2] = -413.09;
-//        magScale[0] = 1.08;
-//        magScale[1] = 1.054;
-//        magScale[2] = 0.898;
-        //Valores con el MPU1, correspondientes al archivo 'MPU_YawAngle_Uncalibrated_Calibracion'
+//        magcalMPU9250(magBias, magScale);
+        //Valores con el MPU1, correspondientes al archivo 'MPU_YawAngle_Uncalibrated_Calibracion_Zowi'
         //Los 3 planos salen casi perfectos en esa figura
-        magBias[0] = -57.78;
-        magBias[1] = 228.83;
-        magBias[2] = -105.37;
-        magScale[0] = 0.97;
-        magScale[1] = 1.07;
-        magScale[2] = 0.97;
+        magBias[0] = 180.35;
+        magBias[1] = -104.66;
+        magBias[2] = 71.38;
+        magScale[0] = 1.04;
+        magScale[1] = 1.01;
+        magScale[2] = 0.95;
 
         Serial.println("AK8963 mag biases (mG)"); Serial.println(magBias[0]); Serial.println(magBias[1]); Serial.println(magBias[2]); 
         Serial.println("AK8963 mag scale (mG)"); Serial.println(magScale[0]); Serial.println(magScale[1]); Serial.println(magScale[2]); 
@@ -192,14 +168,15 @@ void loop() {
 //        Serial.print(mx); Serial.print(",");         
 //        Serial.print(my); Serial.print(",");
 //        Serial.println(mz); //Serial.print("\t");
-        //Serial.println(sqrt(pow(mx,2)+pow(my,2)+pow(mz,2)));
     }
 
     Now = micros();
     deltat = ((Now - lastUpdate)/1000000.0f); // set integration time by time elapsed since last filter update
     lastUpdate = Now;
 
-    MadgwickQuaternionUpdate(-ax, ay, az, gx*PI/180.0f, -gy*PI/180.0f, -gz*PI/180.0f,  my,  -mx, mz);
+    //Al darse la vuelta el sensor, cambia la convención de ejes
+//    MadgwickQuaternionUpdate(-ax, ay, az, gx*PI/180.0f, -gy*PI/180.0f, -gz*PI/180.0f, my, -mx, mz);
+    MadgwickQuaternionUpdate(-ax, -ay, -az, gx*PI/180.0f, gy*PI/180.0f, gz*PI/180.0f, my, mx, -mz);
     
     a12 =   2.0f * (q[1] * q[2] + q[0] * q[3]);
     a22 =   q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3];
@@ -219,7 +196,7 @@ void loop() {
 
 
 void calibrateAccelGyro(float * dest1, float * dest2) {  
-    int                   num_readings = 200;
+    int                   num_readings = 100;
     float                 x_accel = 0;
     float                 y_accel = 0;
     float                 z_accel = 0;
@@ -252,7 +229,7 @@ void calibrateAccelGyro(float * dest1, float * dest2) {
 
     dest1[0] = x_accel; 
     dest1[1] = y_accel; 
-    dest1[2] = (z_accel-16384.0);
+    dest1[2] = (z_accel+16384.0);
     dest2[0] = x_gyro; 
     dest2[1] = y_gyro; 
     dest2[2] = z_gyro; 
